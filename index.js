@@ -284,3 +284,13 @@ client.on('messageCreate', async message => {
           else otherTagsFound.push(`[${tagName}]`);
         }
       });
+      const ourTagsText = ourTagsFound.length > 0 ? ourTagsFound.join('\n') : "None";
+      const otherTagsText = otherTagsFound.length > 0 ? otherTagsFound.join(', ') : "None";
+      const embed = new EmbedBuilder().setColor(0xFF0000).setTitle(`🔎 User Check: ${user.name}`).setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${user.id}&width=420&height=420&format=png`)
+        .addFields({ name: 'OUR TAGS', value: `\`\`\`\n${ourTagsText}\n\`\`\`` }, { name: 'OTHER TAGS', value: `\`\`\`\n${otherTagsText}\n\`\`\`` });
+      message.reply({ embeds: [embed] });
+    } catch (error) { message.reply('⚠️ Error fetching data.'); }
+  }
+});
+
+client.login(process.env.DISCORD_TOKEN);
