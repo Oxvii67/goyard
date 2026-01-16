@@ -87,7 +87,6 @@ client.on('messageCreate', async message => {
     if (!username) return message.reply("Usage: `,see username`");
 
     try {
-      // 1. Get User ID
       const idRes = await fetch('https://users.roblox.com/v1/usernames/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,14 +97,10 @@ client.on('messageCreate', async message => {
       if (!idData.data || idData.data.length === 0) {
         return message.reply(`❌ Could not find Roblox user **${username}**`);
       }
-      
       const user = idData.data[0];
 
-      // 2. Check Rank in Goyard Group
       const rankRes = await fetch(`https://groups.roblox.com/v1/users/${user.id}/groups/roles`);
       const rankData = await rankRes.json();
-      
-      // Look for the Goyard Group ID in their groups
       const goyardGroup = rankData.data.find(g => g.group.id.toString() === MAIN_GROUP_ID);
 
       const embed = new EmbedBuilder()
@@ -113,7 +108,6 @@ client.on('messageCreate', async message => {
         .setTimestamp();
 
       if (goyardGroup) {
-        // THEY ARE IN THE GROUP
         embed.setColor(0x00FF00) // Green
         embed.setTitle(`✅ User Found in Goyard`)
         embed.setDescription(`**${user.name}** is a member of the crew.`)
@@ -122,7 +116,6 @@ client.on('messageCreate', async message => {
             { name: 'Rank ID', value: goyardGroup.role.rank.toString(), inline: true }
         );
       } else {
-        // THEY ARE NOT IN THE GROUP
         embed.setColor(0xFF0000) // Red
         embed.setTitle(`❌ User NOT in Goyard`)
         embed.setDescription(`**${user.name}** has NOT joined the group yet.`)
@@ -130,9 +123,7 @@ client.on('messageCreate', async message => {
             { name: 'Group Link', value: `[Join Here](https://www.roblox.com/communities/${MAIN_GROUP_ID})`, inline: true }
         );
       }
-
       message.reply({ embeds: [embed] });
-
     } catch (error) {
       console.error(error);
       message.reply("⚠️ Error connecting to Roblox.");
@@ -142,21 +133,25 @@ client.on('messageCreate', async message => {
   // ---------------------------------------------------------
   // COMMAND: ,verify or ,v (Give Society Role)
   // ---------------------------------------------------------
-  message.reply(`✅ **Verified:** Given **Society** role to ${member.user.username}.`);
+  if (command === ',verify' || command === ',v') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
       return message.reply("❌ You do not have permission.");
     }
     const member = message.mentions.members.first();
-    if (!member) return message.reply("Usage:  `,v @user`");
+    if (!member) return message.reply("Usage: `,v @user`");
 
     try {
       await member.roles.add(SOCIETY_ROLE_ID);
-      message.reply(`✅ **Verified:** Given <@&${SOCIETY_ROLE_ID}> to ${member.user.username}.`);
+      // FIXED LINE BELOW (No ping, just bold text)
+      message.reply(`✅ **Verified:** Given **Society** role to ${member.user.username}.`);
     } catch (error) {
       message.reply("❌ Error: My bot role must be HIGHER than the Society role!");
     }
   }
 
+  // ---------------------------------------------------------
+  // COMMAND: ,unverify
+  // ---------------------------------------------------------
   if (command === ',unverify') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return;
     const member = message.mentions.members.first();
@@ -214,9 +209,7 @@ client.on('messageCreate', async message => {
           { name: 'Profile Link', value: `[Click Here](https://www.roblox.com/users/${user.id}/profile)`, inline: true }
         )
         .setTimestamp();
-
       message.reply({ embeds: [embed] });
-
     } catch (error) { message.reply('⚠️ Error fetching data.'); }
   }
 });
