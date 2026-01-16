@@ -82,8 +82,8 @@ client.on('messageCreate', async message => {
 
   // 1. MIMIC (,mimic message)
   if (command === ',mimic' || command === ',say') {
-    // Only allow people with "Manage Messages" to use this (so randoms don't abuse it)
-    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
+    // ⚠️ RESTRICTION: ONLY ADMINISTRATORS
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
     
     const text = args.slice(1).join(' '); // Get everything after the command
     if (!text) return;
