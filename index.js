@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionsBitField } = require('discord.js');
 const http = require('http');
+const fs = require('fs');
 
 // --- 1. KEEP ALIVE (FOR RENDER 24/7) ---
 http.createServer((req, res) => {
@@ -64,48 +65,145 @@ const TAG_LIST = {
 };
 const OUR_GROUP_IDS = ['857292331', '1067988454']; 
 
-// --- 3. STARTUP ---
+// --- 3. DATABASE SYSTEM ---
+let robloxData = {};
+if (fs.existsSync('roblox_data.json')) {
+  try {
+    robloxData = JSON.parse(fs.readFileSync('roblox_data.json', 'utf8'));
+  } catch (err) { console.error("Error loading database:", err); }
+}
+
+function saveDatabase() {
+  fs.writeFileSync('roblox_data.json', JSON.stringify(robloxData, null, 2));
+}
+
+// --- 4. STARTUP ---
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
   client.user.setPresence({
-    activities: [{ name: `Tickets`, type: ActivityType.Watching }],
+    activities: [{ name: `Tickets & Tags`, type: ActivityType.Watching }],
     status: 'online',
   });
 });
 
-// --- 4. COMMANDS ---
+// --- 5. THE SPY (Auto-Save Roblox Names) ---
+client.on('messageCreate', async message => {
+  if (!message.author.bot) return; // Only listen to bots (Ticket Tool)
+
+  if (message.embeds.length > 0) {
+    const embed = message.embeds[0];
+    
+    // Search for "Roblox" in the question fields
+    if (embed.fields) {
+      const robloxField = embed.fields.find(f => 
+        f.name.toLowerCase().includes('what is your roblox') || 
+        f.name.toLowerCase().includes('username')
+      );
+      
+      if (robloxField) {
+        // Find User ID
+        let userId = null;
+        if (embed.description) {
+            const match = embed.description.match(/<@!?(\d+)>/);
+            if (match) userId = match[1];
+        }
+        if (!userId) {
+            const userField = embed.fields.find(f => f.name.includes('Created by') || f.name.includes('Opened by'));
+            if (userField) {
+                const match = userField.value.match(/<@!?(\d+)>/);
+                if (match) userId = match[1];
+            }
+        }
+
+        if (userId) {
+          robloxData[userId] = robloxField.value;
+          saveDatabase();
+          console.log(`💾 Auto-Saved: ${userId} = ${robloxField.value}`);
+          message.react('💾'); 
+        }
+      }
+    }
+  }
+});
+
+// --- 6. COMMANDS ---
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
   const args = message.content.split(' ');
   const command = args[0].toLowerCase();
 
-  // 1. VERIFY (,v)
+  // 1. ROCO (Lookup User)
+  if (command === ',roco') {
+    let target = message.mentions.members.first();
+    if (!target && args[1]) try { target = await message.guild.members.fetch(args[1]); } catch(e) {}
+    if (!target && !args[1]) target = message.member;
+    if (!target) return message.reply("Usage: `,roco @user`");
+
+    const savedName = robloxData[target.id];
+    if (savedName) {
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00).setTitle(`👤 Identity Found`)
+        .addFields({ name: 'User', value: `<@${target.id}>` }, { name: 'Roblox Username', value: `**${savedName}**` });
+      message.reply({ embeds: [embed] });
+    } else {
+      message.reply(`❌ I don't know the Roblox username for **${target.user.tag}** yet. Use \`,link @user name\` to fix.`);
+    }
+  }
+
+  // 2. LINK (Manual Save)
+  if (command === ',link') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
+    const target = message.mentions.members.first();
+    const name = args[2];
+    if (!target || !name) return message.reply("Usage: `,link @user RobloxName`");
+    robloxData[target.id] = name;
+    saveDatabase();
+    message.reply(`✅ **Linked:** <@${target.id}> is now known as **${name}**.`);
+  }
+
+  // 3. VERIFY (,v) - UPDATED WITH LINK
   if (command === ',verify' || command === ',v') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
     const member = message.mentions.members.first();
     if (!member) return message.reply("Usage: `,v @user`");
     
-    // Safety Check: Can bot manage this user?
     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) {
         return message.reply("❌ I cannot verify them (Their role is higher than mine!)");
     }
 
     try {
       await member.roles.add(SOCIETY_ROLE_ID);
-      message.reply(`✅ **Verified:** Given **Society** role to ${member.user.username}.`);
+      
+      // CHECK DATABASE FOR LINK
+      const savedName = robloxData[member.id];
+      let replyMsg = `✅ **Verified:** Given **Society** role to ${member.user.username}.`;
+      
+      if (savedName) {
+          replyMsg += `\n🔗 **Roblox:** [${savedName}](https://www.roblox.com/search/users?keyword=${savedName})`;
+      }
+
+      // Send the reply (using an embed is cleaner for links)
+      if (savedName) {
+          const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setDescription(replyMsg);
+          message.reply({ embeds: [embed] });
+      } else {
+          message.reply(replyMsg);
+      }
+
     } catch (e) { 
         console.log(e);
         message.reply("❌ Error: Check my role hierarchy."); 
     }
   }
 
-  // 2. UNVERIFY
+  // 4. UNVERIFY
   if (command === ',unverify') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
     const member = message.mentions.members.first();
     if (!member) return message.reply("Usage: `,unverify @user`");
 
-    // Safety Check: Can bot manage this user?
     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) {
         return message.reply("❌ I cannot unverify them (Their role is higher than mine!)");
     }
@@ -119,7 +217,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // 3. SEE (Check Group)
+  // 5. SEE (Check Group)
   if (command === ',see') {
     const username = args[1];
     if (!username) return message.reply("Usage: `,see username`");
@@ -138,7 +236,7 @@ client.on('messageCreate', async message => {
     } catch (e) { message.reply("⚠️ Roblox API Error"); }
   }
 
-  // 4. CHECK (Check Tags)
+  // 6. CHECK (Check Tags)
   if (command === ',check') {
     const username = args[1];
     if (!username) return message.reply('Usage: `,check username`');
