@@ -70,6 +70,7 @@ const TAG_LIST = {
   '711369814': "V3",
   '36052811': "TRACE"
 };
+// ⚠️ THESE ARE THE FRIENDLY GROUPS (Will not be flagged as spies)
 const OUR_GROUP_IDS = ['857292331', '1067988454']; 
 
 // --- 3. STARTUP ---
@@ -149,12 +150,12 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- 2. BACKGROUND CHECK (LINK BASED - FIXED) ---
+  // --- 2. BACKGROUND CHECK (SMART FILTER: IGNORE OX/ILY) ---
   if (command === ',backgroundcheck' || command === ',bgc') {
-    // Look for link in ANY argument (handles newlines better)
+    // Look for link in ANY argument
     const link = args.find(arg => arg.includes('roblox.com'));
     
-    // Extract Group ID from Link (Works for 'groups' AND 'communities')
+    // Extract Group ID
     let targetGroupId = null;
     if (link) {
         const match = link.match(/(?:groups|communities)\/(\d+)/);
@@ -183,8 +184,12 @@ client.on('messageCreate', async message => {
                 let otherTags = [];
                 userGroups.forEach(g => {
                     const gId = g.group.id.toString();
-                    // We check if they are in ANY tracked tag group (except the one we are scanning)
-                    if (TAG_LIST[gId] && gId !== targetGroupId) {
+                    
+                    // LOGIC FIX: 
+                    // 1. Must be in TAG_LIST
+                    // 2. Must NOT be the group we are scanning
+                    // 3. Must NOT be in "OUR_GROUP_IDS" (OX or ILY)
+                    if (TAG_LIST[gId] && gId !== targetGroupId && !OUR_GROUP_IDS.includes(gId)) {
                         otherTags.push(TAG_LIST[gId]);
                     }
                 });
