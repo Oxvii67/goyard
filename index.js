@@ -18,8 +18,8 @@ const client = new Client({
 
 // --- 2. CONFIGURATION ---
 
-// ⚠️ PASTE YOUR "SOCIETY" ROLE ID HERE
-const SOCIETY_ROLE_ID = 'REPLACE_WITH_SOCIETY_ROLE_ID'; 
+// ✅ YOUR SOCIETY ROLE ID (Hardcoded)
+const SOCIETY_ROLE_ID = '1412788700646998118'; 
 
 // YOUR GROUP ID (Goyard)
 const MAIN_GROUP_ID = '34770198';
@@ -84,10 +84,19 @@ client.on('messageCreate', async message => {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
     const member = message.mentions.members.first();
     if (!member) return message.reply("Usage: `,v @user`");
+    
+    // Safety Check: Can bot manage this user?
+    if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) {
+        return message.reply("❌ I cannot verify them (Their role is higher than mine!)");
+    }
+
     try {
       await member.roles.add(SOCIETY_ROLE_ID);
       message.reply(`✅ **Verified:** Given **Society** role to ${member.user.username}.`);
-    } catch (e) { message.reply("❌ Error: Check my role hierarchy."); }
+    } catch (e) { 
+        console.log(e);
+        message.reply("❌ Error: Check my role hierarchy."); 
+    }
   }
 
   // 2. UNVERIFY
@@ -95,11 +104,17 @@ client.on('messageCreate', async message => {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
     const member = message.mentions.members.first();
     if (!member) return message.reply("Usage: `,unverify @user`");
+
+    // Safety Check: Can bot manage this user?
+    if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) {
+        return message.reply("❌ I cannot unverify them (Their role is higher than mine!)");
+    }
+
     try {
         await member.roles.remove(SOCIETY_ROLE_ID);
         message.reply(`🚫 **Unverified:** Removed role from ${member.user.username}.`);
     } catch (e) { 
-        console.log(e); // Log error to see what happened
+        console.log(e);
         message.reply("❌ Error removing role."); 
     }
   }
