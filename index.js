@@ -1,6 +1,5 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionsBitField, AttachmentBuilder } = require('discord.js');
 const http = require('http');
-const fs = require('fs');
 
 // --- 1. KEEP ALIVE (FOR RENDER 24/7) ---
 http.createServer((req, res) => {
@@ -19,13 +18,25 @@ const client = new Client({
 
 // --- 2. CONFIGURATION ---
 
-// ✅ YOUR SOCIETY ROLE ID (Hardcoded)
+// ✅ YOUR SOCIETY ROLE ID
 const SOCIETY_ROLE_ID = '1412788700646998118'; 
+
+// ✅ SMART LOG SYSTEM (Category ID -> Log Channel ID)
+const LOG_MAP = {
+    '1459802346824531998': '1459802438197313748', // Support -> Support Logs
+    '1459707995373043880': '1459708084405538827', // Gateway -> Gateway Logs
+    '1459993459724390455': '1459993538925301794', // ILY -> ILY Logs
+    '1459993729996816538': '1459993985824194591', // OX -> OX Logs
+    '1459994193912139856': '1459994739003625604'  // Promo -> Promo Logs
+};
+// Fallback channel (Uses Gateway Logs if unknown)
+const FALLBACK_LOG_CHANNEL = '1459708084405538827'; 
 
 // YOUR GROUP ID (Goyard)
 const MAIN_GROUP_ID = '34770198';
+const GROUP_LINK = "https://www.roblox.com/communities/34770198/goyard";
 
-// TAG LIST (For ,check command)
+// TAG LIST
 const TAG_LIST = {
   '1067988454': "OX", 
   '857292331': "ILY",
@@ -65,103 +76,59 @@ const TAG_LIST = {
 };
 const OUR_GROUP_IDS = ['857292331', '1067988454']; 
 
-// --- 3. DATABASE SYSTEM ---
-let robloxData = {};
-if (fs.existsSync('roblox_data.json')) {
-  try {
-    robloxData = JSON.parse(fs.readFileSync('roblox_data.json', 'utf8'));
-  } catch (err) { console.error("Error loading database:", err); }
-}
-
-function saveDatabase() {
-  fs.writeFileSync('roblox_data.json', JSON.stringify(robloxData, null, 2));
-}
-
-// --- 4. STARTUP ---
+// --- 3. STARTUP ---
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
   client.user.setPresence({
-    activities: [{ name: `Tickets & Tags`, type: ActivityType.Watching }],
+    activities: [{ name: `Tickets`, type: ActivityType.Watching }],
     status: 'online',
   });
 });
 
-// --- 5. THE SPY (Auto-Save Roblox Names) ---
-client.on('messageCreate', async message => {
-  if (!message.author.bot) return; // Only listen to bots (Ticket Tool)
-
-  if (message.embeds.length > 0) {
-    const embed = message.embeds[0];
-    
-    // Search for "Roblox" in the question fields
-    if (embed.fields) {
-      const robloxField = embed.fields.find(f => 
-        f.name.toLowerCase().includes('what is your roblox') || 
-        f.name.toLowerCase().includes('username')
-      );
-      
-      if (robloxField) {
-        // Find User ID
-        let userId = null;
-        if (embed.description) {
-            const match = embed.description.match(/<@!?(\d+)>/);
-            if (match) userId = match[1];
-        }
-        if (!userId) {
-            const userField = embed.fields.find(f => f.name.includes('Created by') || f.name.includes('Opened by'));
-            if (userField) {
-                const match = userField.value.match(/<@!?(\d+)>/);
-                if (match) userId = match[1];
-            }
-        }
-
-        if (userId) {
-          robloxData[userId] = robloxField.value;
-          saveDatabase();
-          console.log(`💾 Auto-Saved: ${userId} = ${robloxField.value}`);
-          message.react('💾'); 
-        }
-      }
-    }
-  }
-});
-
-// --- 6. COMMANDS ---
+// --- 4. COMMANDS ---
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
   const args = message.content.split(' ');
   const command = args[0].toLowerCase();
 
-  // 1. ROCO (Lookup User)
-  if (command === ',roco') {
-    let target = message.mentions.members.first();
-    if (!target && args[1]) try { target = await message.guild.members.fetch(args[1]); } catch(e) {}
-    if (!target && !args[1]) target = message.member;
-    if (!target) return message.reply("Usage: `,roco @user`");
+  // 1. SMART CLOSE (Transcript -> Correct Category Channel -> Delete)
+  if (command === ',close') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply("❌ No permission.");
+    
+    message.reply("🔒 **Closing Ticket...** Sorting transcript and deleting in 5 seconds.");
 
-    const savedName = robloxData[target.id];
-    if (savedName) {
-      const embed = new EmbedBuilder()
-        .setColor(0x00FF00).setTitle(`👤 Identity Found`)
-        .addFields({ name: 'User', value: `<@${target.id}>` }, { name: 'Roblox Username', value: `**${savedName}**` });
-      message.reply({ embeds: [embed] });
-    } else {
-      message.reply(`❌ I don't know the Roblox username for **${target.user.tag}** yet. Use \`,link @user name\` to fix.`);
+    try {
+      // A. Generate Transcript
+      const messages = await message.channel.messages.fetch({ limit: 100 });
+      const transcript = messages.reverse().map(m => `${new Date(m.createdTimestamp).toLocaleString()} - ${m.author.tag}: ${m.content}`).join('\n');
+      const attachment = new AttachmentBuilder(Buffer.from(transcript, 'utf-8'), { name: `transcript-${message.channel.name}.txt` });
+
+      // B. Find the Correct Log Channel using Parent Category ID
+      const categoryId = message.channel.parentId;
+      let targetChannelId = LOG_MAP[categoryId] || FALLBACK_LOG_CHANNEL;
+      
+      // C. Send to that Channel
+      const logChannel = await client.channels.fetch(targetChannelId).catch(() => null);
+      if (logChannel) {
+        await logChannel.send({ 
+            content: `📝 **Ticket Closed:** ${message.channel.name}\n**Category:** ${message.channel.parent?.name || "Unknown"}\n**Closed by:** ${message.author.tag}`, 
+            files: [attachment] 
+        });
+      } else {
+        console.log("Could not find log channel for this category.");
+      }
+
+      // D. Delete Channel (Wait 5 seconds)
+      setTimeout(() => message.channel.delete(), 5000);
+
+    } catch (err) {
+      console.log(err);
+      message.channel.send("❌ Error generating transcript, but I will still close the ticket.");
+      setTimeout(() => message.channel.delete(), 5000);
     }
   }
 
-  // 2. LINK (Manual Save)
-  if (command === ',link') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
-    const target = message.mentions.members.first();
-    const name = args[2];
-    if (!target || !name) return message.reply("Usage: `,link @user RobloxName`");
-    robloxData[target.id] = name;
-    saveDatabase();
-    message.reply(`✅ **Linked:** <@${target.id}> is now known as **${name}**.`);
-  }
-
-  // 3. VERIFY (,v) - UPDATED WITH LINK
+  // 2. VERIFY (,v)
   if (command === ',verify' || command === ',v') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
     const member = message.mentions.members.first();
@@ -173,32 +140,13 @@ client.on('messageCreate', async message => {
 
     try {
       await member.roles.add(SOCIETY_ROLE_ID);
-      
-      // CHECK DATABASE FOR LINK
-      const savedName = robloxData[member.id];
-      let replyMsg = `✅ **Verified:** Given **Society** role to ${member.user.username}.`;
-      
-      if (savedName) {
-          replyMsg += `\n🔗 **Roblox:** [${savedName}](https://www.roblox.com/search/users?keyword=${savedName})`;
-      }
-
-      // Send the reply (using an embed is cleaner for links)
-      if (savedName) {
-          const embed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setDescription(replyMsg);
-          message.reply({ embeds: [embed] });
-      } else {
-          message.reply(replyMsg);
-      }
-
+      message.reply(`✅ **Verified:** Given **Society** role to ${member.user.username}.`);
     } catch (e) { 
-        console.log(e);
         message.reply("❌ Error: Check my role hierarchy."); 
     }
   }
 
-  // 4. UNVERIFY
+  // 3. UNVERIFY
   if (command === ',unverify') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
     const member = message.mentions.members.first();
@@ -212,12 +160,11 @@ client.on('messageCreate', async message => {
         await member.roles.remove(SOCIETY_ROLE_ID);
         message.reply(`🚫 **Unverified:** Removed role from ${member.user.username}.`);
     } catch (e) { 
-        console.log(e);
         message.reply("❌ Error removing role."); 
     }
   }
 
-  // 5. SEE (Check Group)
+  // 4. SEE (Check Group - With Link)
   if (command === ',see') {
     const username = args[1];
     if (!username) return message.reply("Usage: `,see username`");
@@ -230,13 +177,17 @@ client.on('messageCreate', async message => {
       const rankData = await rankRes.json();
       const group = rankData.data.find(g => g.group.id.toString() === MAIN_GROUP_ID);
       const embed = new EmbedBuilder().setTimestamp().setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${user.id}&width=420&height=420&format=png`);
-      if (group) embed.setColor(0x00FF00).setTitle("✅ In Goyard").setDescription(`**${user.name}** is Rank: ${group.role.name}`);
-      else embed.setColor(0xFF0000).setTitle("❌ Not in Goyard");
+      
+      if (group) {
+        embed.setColor(0x00FF00).setTitle("✅ In Goyard").setDescription(`**${user.name}** is Rank: ${group.role.name}`);
+      } else {
+        embed.setColor(0xFF0000).setTitle("❌ Not in Goyard").setDescription(`**${user.name}** is not in the group.\n[Click Here to Join](${GROUP_LINK})`);
+      }
       message.reply({ embeds: [embed] });
     } catch (e) { message.reply("⚠️ Roblox API Error"); }
   }
 
-  // 6. CHECK (Check Tags)
+  // 5. CHECK (Tags)
   if (command === ',check') {
     const username = args[1];
     if (!username) return message.reply('Usage: `,check username`');
