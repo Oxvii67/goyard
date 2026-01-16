@@ -142,12 +142,12 @@ client.on('messageCreate', async message => {
   // ---------------------------------------------------------
   // COMMAND: ,verify or ,v (Give Society Role)
   // ---------------------------------------------------------
-  if (command === ',verify' || command === ',v') {
+  message.reply(`✅ **Verified:** Given **Society** role to ${member.user.username}.`);
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
       return message.reply("❌ You do not have permission.");
     }
     const member = message.mentions.members.first();
-    if (!member) return message.reply("Usage: `,v @user`");
+    if (!member) return message.reply("Usage:  `,v @user`");
 
     try {
       await member.roles.add(SOCIETY_ROLE_ID);
