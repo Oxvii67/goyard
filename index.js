@@ -148,19 +148,19 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- 2. BACKGROUND CHECK (LINK BASED) ---
+  // --- 2. BACKGROUND CHECK (UPDATED FOR COMMUNITIES) ---
   if (command === ',backgroundcheck' || command === ',bgc') {
     // Look for a link in the message
-    const link = args.find(arg => arg.includes('roblox.com/groups/'));
+    const link = args.find(arg => arg.includes('roblox.com'));
     
-    // Extract Group ID from Link
+    // Extract Group ID from Link (Works for 'groups' AND 'communities')
     let targetGroupId = null;
     if (link) {
-        const match = link.match(/groups\/(\d+)/);
+        const match = link.match(/(?:groups|communities)\/(\d+)/);
         if (match) targetGroupId = match[1];
     }
 
-    if (!targetGroupId) return message.reply("❌ Invalid Usage.\n**Correct:** `,bgc https://www.roblox.com/groups/330818699/Name`");
+    if (!targetGroupId) return message.reply("❌ Invalid Usage.\n**Correct:** `,bgc https://www.roblox.com/communities/1067988454/...`");
     
     message.reply(`🔎 **Scanning the last 100 members of Group ${targetGroupId}...**`);
 
@@ -184,105 +184,3 @@ client.on('messageCreate', async message => {
                     const gId = g.group.id.toString();
                     // We check if they are in ANY tracked tag group (except the one we are scanning)
                     if (TAG_LIST[gId] && gId !== targetGroupId) {
-                        otherTags.push(TAG_LIST[gId]);
-                    }
-                });
-
-                if (otherTags.length > 0) {
-                    spiesFound.push(`**${member.user.username}** is also in: ${otherTags.join(', ')}`);
-                }
-            } catch (err) { continue; } 
-        }
-
-        const embed = new EmbedBuilder()
-            .setTitle(`🕵️ Background Check Report`)
-            .setColor(spiesFound.length > 0 ? 0xFF0000 : 0x00FF00)
-            .setFooter({ text: `Scanned the newest ${usersToCheck.length} members from the provided link.` });
-
-        if (spiesFound.length > 0) {
-            const desc = `⚠️ **Found ${spiesFound.length} Double-Taggers:**\n\n${spiesFound.join('\n')}`;
-            embed.setDescription(desc.length > 4000 ? desc.substring(0, 4000) + "..." : desc);
-        } else {
-            embed.setDescription("✅ **Clean:** No double-taggers found in the last 100 joiners.");
-        }
-
-        message.channel.send({ embeds: [embed] });
-
-    } catch (e) { 
-        console.log(e);
-        message.reply("⚠️ Error connecting to Roblox API."); 
-    }
-  }
-
-  // --- 3. CLASSIC COMMANDS ---
-  if (command === ',mimic' || command === ',say') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
-    const text = args.slice(1).join(' ');
-    if (!text) return;
-    try { await message.delete(); } catch(e) {}
-    message.channel.send(text);
-  }
-
-  if (command === ',verify' || command === ',v') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
-    const member = message.mentions.members.first();
-    if (!member) return message.reply("Usage: `,v @user`");
-    if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) return message.reply("❌ Hierarchy Error.");
-    try { await member.roles.add(SOCIETY_ROLE_ID); message.reply(`✅ **Verified:** ${member.user.username}`); } catch (e) { message.reply("❌ Error."); }
-  }
-
-  if (command === ',unverify') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
-    const member = message.mentions.members.first();
-    if (!member) return message.reply("Usage: `,unverify @user`");
-    try { await member.roles.remove(SOCIETY_ROLE_ID); message.reply(`🚫 **Unverified:** ${member.user.username}`); } catch (e) { message.reply("❌ Error."); }
-  }
-
-  if (command === ',see') {
-    const username = args[1];
-    if (!username) return message.reply("Usage: `,see username`");
-    try {
-      const idRes = await fetch('https://users.roblox.com/v1/usernames/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usernames: [username], excludeBannedUsers: true }) });
-      const idData = await idRes.json();
-      if (!idData.data || !idData.data.length) return message.reply("❌ User not found.");
-      const user = idData.data[0];
-      const rankRes = await fetch(`https://groups.roblox.com/v1/users/${user.id}/groups/roles`);
-      const rankData = await rankRes.json();
-      const group = rankData.data.find(g => g.group.id.toString() === MAIN_GROUP_ID);
-      const embed = new EmbedBuilder().setTimestamp().setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${user.id}&width=420&height=420&format=png`);
-      if (group) embed.setColor(0x00FF00).setTitle("✅ In Goyard").setDescription(`**${user.name}** is Rank: ${group.role.name}`);
-      else embed.setColor(0xFF0000).setTitle("❌ Not in Goyard").setDescription(`**${user.name}** is not in the group.\n[Click Here to Join](${GROUP_LINK})`);
-      message.reply({ embeds: [embed] });
-    } catch (e) { message.reply("⚠️ Roblox API Error"); }
-  }
-
-  if (command === ',check') {
-    const username = args[1];
-    if (!username) return message.reply('Usage: `,check username`');
-    try {
-      const userRes = await fetch('https://users.roblox.com/v1/usernames/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usernames: [username], excludeBannedUsers: true }) });
-      const userData = await userRes.json();
-      if (!userData.data || userData.data.length === 0) return message.reply(`❌ User **${username}** not found.`);
-      const user = userData.data[0];
-      const groupRes = await fetch(`https://groups.roblox.com/v1/users/${user.id}/groups/roles`);
-      const groupData = await groupRes.json();
-      const userGroups = groupData.data || [];
-      let ourTagsFound = [], otherTagsFound = [];
-      userGroups.forEach(group => {
-        const groupId = group.group.id.toString();
-        if (TAG_LIST[groupId]) {
-          const tagName = TAG_LIST[groupId];
-          if (OUR_GROUP_IDS.includes(groupId)) ourTagsFound.push(`[${tagName}]`);
-          else otherTagsFound.push(`[${tagName}]`);
-        }
-      });
-      const ourTagsText = ourTagsFound.length > 0 ? ourTagsFound.join('\n') : "None";
-      const otherTagsText = otherTagsFound.length > 0 ? otherTagsFound.join(', ') : "None";
-      const embed = new EmbedBuilder().setColor(0xFF0000).setTitle(`🔎 User Check: ${user.name}`).setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${user.id}&width=420&height=420&format=png`)
-        .addFields({ name: 'OUR TAGS', value: `\`\`\`\n${ourTagsText}\n\`\`\`` }, { name: 'OTHER TAGS', value: `\`\`\`\n${otherTagsText}\n\`\`\`` });
-      message.reply({ embeds: [embed] });
-    } catch (error) { message.reply('⚠️ Error fetching data.'); }
-  }
-});
-
-client.login(process.env.DISCORD_TOKEN);
