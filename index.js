@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionsBitField, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionsBitField } = require('discord.js');
 const http = require('http');
 
 // --- 1. KEEP ALIVE (FOR RENDER 24/7) ---
@@ -20,17 +20,6 @@ const client = new Client({
 
 // ✅ YOUR SOCIETY ROLE ID
 const SOCIETY_ROLE_ID = '1412788700646998118'; 
-
-// ✅ SMART LOG SYSTEM (Category ID -> Log Channel ID)
-const LOG_MAP = {
-    '1459802346824531998': '1459802438197313748', // Support -> Support Logs
-    '1459707995373043880': '1459708084405538827', // Gateway -> Gateway Logs
-    '1459993459724390455': '1459993538925301794', // ILY -> ILY Logs
-    '1459993729996816538': '1459993985824194591', // OX -> OX Logs
-    '1459994193912139856': '1459994739003625604'  // Promo -> Promo Logs
-};
-// Fallback channel (Uses Gateway Logs if unknown)
-const FALLBACK_LOG_CHANNEL = '1459708084405538827'; 
 
 // YOUR GROUP ID (Goyard)
 const MAIN_GROUP_ID = '34770198';
@@ -91,41 +80,19 @@ client.on('messageCreate', async message => {
   const args = message.content.split(' ');
   const command = args[0].toLowerCase();
 
-  // 1. SMART CLOSE (Transcript -> Correct Category Channel -> Delete)
-  if (command === ',close') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply("❌ No permission.");
+  // 1. MIMIC (,mimic message)
+  if (command === ',mimic' || command === ',say') {
+    // Only allow people with "Manage Messages" to use this (so randoms don't abuse it)
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
     
-    message.reply("🔒 **Closing Ticket...** Sorting transcript and deleting in 5 seconds.");
+    const text = args.slice(1).join(' '); // Get everything after the command
+    if (!text) return;
 
     try {
-      // A. Generate Transcript
-      const messages = await message.channel.messages.fetch({ limit: 100 });
-      const transcript = messages.reverse().map(m => `${new Date(m.createdTimestamp).toLocaleString()} - ${m.author.tag}: ${m.content}`).join('\n');
-      const attachment = new AttachmentBuilder(Buffer.from(transcript, 'utf-8'), { name: `transcript-${message.channel.name}.txt` });
+        await message.delete(); // Delete the user's command
+    } catch(e) { } // Ignore if bot cant delete
 
-      // B. Find the Correct Log Channel using Parent Category ID
-      const categoryId = message.channel.parentId;
-      let targetChannelId = LOG_MAP[categoryId] || FALLBACK_LOG_CHANNEL;
-      
-      // C. Send to that Channel
-      const logChannel = await client.channels.fetch(targetChannelId).catch(() => null);
-      if (logChannel) {
-        await logChannel.send({ 
-            content: `📝 **Ticket Closed:** ${message.channel.name}\n**Category:** ${message.channel.parent?.name || "Unknown"}\n**Closed by:** ${message.author.tag}`, 
-            files: [attachment] 
-        });
-      } else {
-        console.log("Could not find log channel for this category.");
-      }
-
-      // D. Delete Channel (Wait 5 seconds)
-      setTimeout(() => message.channel.delete(), 5000);
-
-    } catch (err) {
-      console.log(err);
-      message.channel.send("❌ Error generating transcript, but I will still close the ticket.");
-      setTimeout(() => message.channel.delete(), 5000);
-    }
+    message.channel.send(text); // Send just the text
   }
 
   // 2. VERIFY (,v)
