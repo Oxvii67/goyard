@@ -70,7 +70,7 @@ const TAG_LIST = {
   '711369814': "V3",
   '36052811': "TRACE"
 };
-// ⚠️ THESE ARE THE FRIENDLY GROUPS (Will not be flagged as spies)
+// ⚠️ FRIENDLY GROUPS (WILL BE IGNORED IN BGC)
 const OUR_GROUP_IDS = ['857292331', '1067988454']; 
 
 // --- 3. STARTUP ---
@@ -101,7 +101,7 @@ client.on('messageCreate', async message => {
     message.reply("⚔️ **Setting up Raid...** Scanning target...");
 
     try {
-        // A. Get Presence (Game Status)
+        // A. Get Presence
         const presenceRes = await fetch('https://presence.roblox.com/v1/presence/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -110,29 +110,34 @@ client.on('messageCreate', async message => {
         const presenceData = await presenceRes.json();
         const userPresence = presenceData.userPresences[0];
 
-        // B. Get Username & Picture
+        // B. Get User Info
         const userRes = await fetch(`https://users.roblox.com/v1/users/${userId}`);
         const userData = await userRes.json();
         const username = userData.name || "Target";
         
-        // C. Prepare Data
         let joinLink = `https://www.roblox.com/users/${userId}/profile`; 
         let isDirect = false;
         let gameName = "Offline / Website";
         let gameStats = "N/A";
         let thumbnail = `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=420&height=420&format=png`;
 
-        // D. If In-Game, Get Game Details
+        // C. Analyze Game Status
         if (userPresence && userPresence.userPresenceType === 2) {
-            gameName = userPresence.lastLocation || "In Game";
+            // Attempt to get Game Name from lastLocation
+            gameName = userPresence.lastLocation || "In Game (Hidden)";
             
-            // If public server, enable direct join
+            // 1. Try DIRECT JOIN (Best Case)
             if (userPresence.gameId) {
                 joinLink = `roblox://experiences/start?placeId=${userPresence.rootPlaceId}&gameInstanceId=${userPresence.gameId}`;
                 isDirect = true;
+            } 
+            // 2. Fallback: Link to Game Page (If we have PlaceID but no ServerID)
+            else if (userPresence.rootPlaceId) {
+                joinLink = `https://www.roblox.com/games/${userPresence.rootPlaceId}`;
+                gameName += " (Direct Join Unavailable)";
             }
 
-            // Fetch Game Stats (Players & Server Size)
+            // D. Fetch Game Details (If we have a PlaceID)
             if (userPresence.rootPlaceId) {
                 try {
                     const gameRes = await fetch(`https://games.roblox.com/v1/games/multiget-place-details?placeIds=${userPresence.rootPlaceId}`, {
@@ -141,23 +146,23 @@ client.on('messageCreate', async message => {
                     const gameData = await gameRes.json();
                     const place = gameData[0];
                     if (place) {
-                        gameStats = `👥 **${place.playing.toLocaleString()}** Playing Now\n🧢 **Server Max:** ${place.maxPlayers} Players`;
-                        // Also get game thumbnail
+                        gameStats = `👥 **${place.playing.toLocaleString()}** Active Players\n🧢 **Max:** ${place.maxPlayers} per server`;
+                        // Get Game Thumbnail
                         const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/games/icons?universeIds=${place.universeId}&returnPolicy=PlaceHolder&size=512x512&format=Png&isCircular=false`);
                         const thumbData = await thumbRes.json();
                         if (thumbData.data && thumbData.data[0]) {
                              thumbnail = thumbData.data[0].imageUrl;
                         }
                     }
-                } catch (e) { console.log("Failed to fetch game stats"); }
+                } catch (e) { console.log("Failed to fetch stats"); }
             }
         }
 
         const pings = `<@&${ROLE_RAID_PING}> <@&${ROLE_CS_FG}> <@&${ROLE_STATUS_FG}> <@&${ROLE_OX}> <@&${ROLE_ILY}>`;
 
         const embed = new EmbedBuilder()
-            .setTitle(isDirect ? "🚨 RAID STARTED - DIRECT JOIN" : "🚨 RAID STARTED - PROFILE ONLY")
-            .setColor(isDirect ? 0x00FF00 : 0xFF0000)
+            .setTitle(isDirect ? "🚨 RAID STARTED - DIRECT JOIN" : "🚨 RAID STARTED - GAME DETECTED")
+            .setColor(isDirect ? 0x00FF00 : 0xFFA500) // Green for Direct, Orange for Game Page
             .setThumbnail(thumbnail)
             .addFields(
                 { name: '🎯 Target', value: `[${username}](https://www.roblox.com/users/${userId}/profile)`, inline: true },
@@ -166,10 +171,13 @@ client.on('messageCreate', async message => {
             );
 
         if (isDirect) {
-            embed.addFields({ name: '🚀 DIRECT JOIN', value: `[CLICK TO LAUNCH GAME](${joinLink})`, inline: false });
-            embed.setFooter({ text: "Clicking the link will launch Roblox immediately." });
+            embed.addFields({ name: '🚀 DIRECT JOIN', value: `[CLICK TO LAUNCH](${joinLink})`, inline: false });
+            embed.setFooter({ text: "Clicking launches Roblox immediately." });
+        } else if (userPresence && userPresence.rootPlaceId) {
+             embed.addFields({ name: '⚠️ JOIN VIA PAGE', value: `[OPEN GAME PAGE](${joinLink})`, inline: false });
+             embed.setFooter({ text: "Direct join blocked by API. Use the game page link." });
         } else {
-            embed.setFooter({ text: "User is offline or has joins off. Profile linked." });
+            embed.setFooter({ text: "User is offline or joins are completely hidden." });
         }
 
         message.channel.send({ content: pings, embeds: [embed] });
@@ -180,7 +188,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- 2. BACKGROUND CHECK (SMART FILTER) ---
+  // --- 2. BACKGROUND CHECK (SMART FILTER: IGNORE OX/ILY) ---
   if (command === ',backgroundcheck' || command === ',bgc') {
     const link = args.find(arg => arg.includes('roblox.com'));
     let targetGroupId = null;
@@ -204,6 +212,7 @@ client.on('messageCreate', async message => {
                 let otherTags = [];
                 userGroups.forEach(g => {
                     const gId = g.group.id.toString();
+                    // IGNORE OX AND ILY
                     if (TAG_LIST[gId] && gId !== targetGroupId && !OUR_GROUP_IDS.includes(gId)) {
                         otherTags.push(TAG_LIST[gId]);
                     }
