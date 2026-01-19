@@ -32,7 +32,7 @@ const ROLE_ILY = '1459624016582021151';
 const MAIN_GROUP_ID = '34770198';
 const GROUP_LINK = "https://www.roblox.com/communities/34770198/goyard";
 
-// ✅ TAG LIST
+// ✅ TAG LIST (Used for Spies & Checks)
 const TAG_LIST = {
   '1067988454': "OX", 
   '857292331': "ILY",
@@ -70,6 +70,7 @@ const TAG_LIST = {
   '711369814': "V3",
   '36052811': "TRACE"
 };
+// ⚠️ FRIENDLY GROUPS (WILL BE IGNORED IN BGC)
 const OUR_GROUP_IDS = ['857292331', '1067988454']; 
 
 // --- 3. SLASH COMMAND REGISTRATION ---
@@ -174,7 +175,6 @@ async function handleRaid(targetLink, replyCallback, channel) {
             embed.setFooter({ text: "User is offline or joins are completely hidden." });
         }
         
-        // Send pings + embed
         await channel.send({ content: pings, embeds: [embed] });
 
     } catch (e) { console.log(e); replyCallback("❌ Error fetching target."); }
@@ -188,7 +188,7 @@ async function handleBGC(link, replyCallback, channel) {
     }
     if (!targetGroupId) return replyCallback("❌ Invalid Usage. Provide a valid Group Link.");
     
-    await replyCallback(`🔎 **Scanning the last 100 members of Group ${targetGroupId}...**`);
+    await replyCallback(`🔎 **Scanning Group ${targetGroupId}...**`);
 
     try {
         const membersRes = await fetch(`https://groups.roblox.com/v1/groups/${targetGroupId}/users?sortOrder=Desc&limit=100`);
@@ -262,7 +262,6 @@ client.on('interactionCreate', async interaction => {
     }
     else if (interaction.commandName === 'see' || interaction.commandName === 'check') {
         await interaction.deferReply();
-        // Just reuse the logic for simplicity (fetching user ID logic is short enough to duplicate for safety)
         const username = interaction.options.getString('username');
         try {
             const userRes = await fetch('https://users.roblox.com/v1/usernames/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usernames: [username], excludeBannedUsers: true }) });
@@ -295,11 +294,20 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// --- 7. MESSAGE COMMAND HANDLER (LEGACY) ---
+// --- 7. MESSAGE COMMAND HANDLER (FLEXIBLE: MENTION OR ID) ---
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
   const args = message.content.split(/\s+/);
   const command = args[0].toLowerCase();
+
+  // Helper to get member from ID or Mention
+  async function getMemberFromArg(arg) {
+    if (!arg) return null;
+    let userId = arg.replace(/[<@!>]/g, ''); // Remove <@!> if mention
+    try {
+        return await message.guild.members.fetch(userId);
+    } catch (e) { return null; }
+  }
 
   if (command === ',raid') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
@@ -310,31 +318,39 @@ client.on('messageCreate', async message => {
     const link = args.find(arg => arg.includes('roblox.com'));
     await handleBGC(link, (msg) => message.reply(msg), message.channel);
   }
-  // ... other legacy commands can stay or be replaced by slash
-  // Mimic
   else if (command === ',mimic' || command === ',say') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
     const text = args.slice(1).join(' ');
     try { await message.delete(); } catch(e) {}
     message.channel.send(text);
   }
-  // Verify
+  
+  // VERIFY (Flexible: ID or Mention)
   else if (command === ',verify' || command === ',v') {
      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
-     const member = message.mentions.members.first();
-     if (!member) return message.reply("Usage: `,v @user`");
-     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) return message.reply("❌ Hierarchy Error.");
+     
+     // Try to find a member using the first argument (could be ID or Mention)
+     const member = await getMemberFromArg(args[1]);
+     
+     if (!member) return message.reply("Usage: `,v @user` OR `,v 987654321`");
+     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) return message.reply("❌ Hierarchy Error. I cannot verify someone ranked higher than me.");
+     
      try { await member.roles.add(SOCIETY_ROLE_ID); message.reply(`✅ **Verified:** ${member.user.username}`); } catch (e) { message.reply("❌ Error."); }
   }
-  // Unverify
+  
+  // UNVERIFY (Flexible: ID or Mention)
   else if (command === ',unverify') {
      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
-     const member = message.mentions.members.first();
-     if (!member) return message.reply("Usage: `,unverify @user`");
-     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) return message.reply("❌ Hierarchy Error.");
+     
+     const member = await getMemberFromArg(args[1]);
+
+     if (!member) return message.reply("Usage: `,unverify @user` OR `,unverify 987654321`");
+     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) return message.reply("❌ Hierarchy Error. I cannot unverify someone ranked higher than me.");
+     
      try { await member.roles.remove(SOCIETY_ROLE_ID); message.reply(`🚫 **Unverified:** ${member.user.username}`); } catch (e) { message.reply("❌ Error."); }
   }
-  // See/Check (Legacy)
+  
+  // See/Check
   else if (command === ',see' || command === ',check') {
       const username = args[1];
       if (!username) return message.reply(`Usage: ${command} username`);
