@@ -32,7 +32,7 @@ const ROLE_ILY = '1459624016582021151';
 const MAIN_GROUP_ID = '34770198';
 const GROUP_LINK = "https://www.roblox.com/communities/34770198/goyard";
 
-// ✅ TAG LIST (Used for Spies & Checks)
+// ✅ TAG LIST
 const TAG_LIST = {
   '1067988454': "OX", 
   '857292331': "ILY",
@@ -70,7 +70,6 @@ const TAG_LIST = {
   '711369814': "V3",
   '36052811': "TRACE"
 };
-// ⚠️ FRIENDLY GROUPS (WILL BE IGNORED IN BGC)
 const OUR_GROUP_IDS = ['857292331', '1067988454']; 
 
 // --- 3. SLASH COMMAND REGISTRATION ---
@@ -91,19 +90,16 @@ client.once('ready', async () => {
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
-    console.log('Started refreshing application (/) commands.');
-    // Register commands to ALL guilds the bot is in
     const guilds = client.guilds.cache.map(guild => guild.id);
     for (const guildId of guilds) {
         await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body: commands });
     }
-    console.log('Successfully reloaded application (/) commands.');
-  } catch (error) {
-    console.error(error);
-  }
+  } catch (error) { console.error(error); }
 });
 
 // --- 5. LOGIC HELPERS ---
+
+// --- RAID HANDLER (UPDATED DESIGN) ---
 async function handleRaid(targetLink, replyCallback, channel) {
     let userId = null;
     if (targetLink) {
@@ -122,58 +118,48 @@ async function handleRaid(targetLink, replyCallback, channel) {
         const userRes = await fetch(`https://users.roblox.com/v1/users/${userId}`);
         const userData = await userRes.json();
         const username = userData.name || "Target";
+        const thumbnail = `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=420&height=420&format=png`;
 
-        let joinLink = `https://www.roblox.com/users/${userId}/profile`; 
-        let isDirect = false;
-        let gameName = "Offline / Website";
-        let gameStats = "N/A";
-        let thumbnail = `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=420&height=420&format=png`;
+        // Default: Offline
+        let statusText = "🔴 Offline";
+        let joinText = "OPEN PROFILE";
+        let joinLink = `https://www.roblox.com/users/${userId}/profile`;
+        let color = 0xFF0000; // Red
 
-        if (userPresence && userPresence.userPresenceType === 2) {
-            gameName = userPresence.lastLocation || "In Game (Hidden)";
-            if (userPresence.gameId) {
-                joinLink = `roblox://experiences/start?placeId=${userPresence.rootPlaceId}&gameInstanceId=${userPresence.gameId}`;
-                isDirect = true;
-            } else if (userPresence.rootPlaceId) {
-                joinLink = `https://www.roblox.com/games/${userPresence.rootPlaceId}`;
-                gameName += " (Direct Join Unavailable)";
-            }
-
-            if (userPresence.rootPlaceId) {
-                try {
-                    const gameRes = await fetch(`https://games.roblox.com/v1/games/multiget-place-details?placeIds=${userPresence.rootPlaceId}`, { headers: { 'Content-Type': 'application/json' } });
-                    const gameData = await gameRes.json();
-                    const place = gameData[0];
-                    if (place) {
-                        gameStats = `👥 **${place.playing.toLocaleString()}** Active Players\n🧢 **Max:** ${place.maxPlayers} per server`;
-                        const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/games/icons?universeIds=${place.universeId}&returnPolicy=PlaceHolder&size=512x512&format=Png&isCircular=false`);
-                        const thumbData = await thumbRes.json();
-                        if (thumbData.data && thumbData.data[0]) thumbnail = thumbData.data[0].imageUrl;
-                    }
-                } catch (e) {}
+        if (userPresence) {
+            if (userPresence.userPresenceType === 1) {
+                statusText = "🟢 Online (Website)";
+                color = 0x00FF00;
+            } else if (userPresence.userPresenceType === 2) {
+                statusText = "🎮 In Game";
+                color = 0x00FF00;
+                
+                // Try to get Server Link
+                if (userPresence.gameId) {
+                    joinLink = `roblox://experiences/start?placeId=${userPresence.rootPlaceId}&gameInstanceId=${userPresence.gameId}`;
+                    joinText = "🚀 LAUNCH SERVER";
+                } else if (userPresence.rootPlaceId) {
+                    joinLink = `https://www.roblox.com/games/${userPresence.rootPlaceId}`;
+                    joinText = "⚠️ OPEN GAME PAGE";
+                }
+            } else if (userPresence.userPresenceType === 3) {
+                statusText = "🔨 In Studio";
+                color = 0xFFA500;
             }
         }
 
         const pings = `<@&${ROLE_RAID_PING}> <@&${ROLE_CS_FG}> <@&${ROLE_STATUS_FG}> <@&${ROLE_OX}> <@&${ROLE_ILY}>`;
+        
         const embed = new EmbedBuilder()
-            .setTitle(isDirect ? "🚨 RAID STARTED - DIRECT JOIN" : "🚨 RAID STARTED - GAME DETECTED")
-            .setColor(isDirect ? 0x00FF00 : 0xFFA500)
+            .setTitle("🚨 RAID STARTED")
+            .setColor(color)
             .setThumbnail(thumbnail)
+            .setDescription(`# [${username}](https://www.roblox.com/users/${userId}/profile)`) // BIG USERNAME
             .addFields(
-                { name: '🎯 Target', value: `[${username}](https://www.roblox.com/users/${userId}/profile)`, inline: true },
-                { name: '🎮 Game', value: gameName, inline: true },
-                { name: '📊 Game Stats', value: gameStats, inline: false }
-            );
-
-        if (isDirect) {
-            embed.addFields({ name: '🚀 DIRECT JOIN', value: `[CLICK TO LAUNCH](${joinLink})`, inline: false });
-            embed.setFooter({ text: "Clicking launches Roblox immediately." });
-        } else if (userPresence && userPresence.rootPlaceId) {
-             embed.addFields({ name: '⚠️ JOIN VIA PAGE', value: `[OPEN GAME PAGE](${joinLink})`, inline: false });
-             embed.setFooter({ text: "Direct join blocked by API. Use the game page link." });
-        } else {
-            embed.setFooter({ text: "User is offline or joins are completely hidden." });
-        }
+                { name: 'Status', value: statusText, inline: true },
+                { name: 'JOIN', value: `[**${joinText}**](${joinLink})`, inline: true }
+            )
+            .setFooter({ text: "Click the JOIN link to attack." });
         
         await channel.send({ content: pings, embeds: [embed] });
 
@@ -229,7 +215,7 @@ async function handleBGC(link, replyCallback, channel) {
     } catch (e) { channel.send("⚠️ Error connecting to Roblox API."); }
 }
 
-// --- 6. SLASH COMMAND HANDLER ---
+// --- 6. COMMAND HANDLERS ---
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -294,19 +280,15 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// --- 7. MESSAGE COMMAND HANDLER (FLEXIBLE: MENTION OR ID) ---
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
   const args = message.content.split(/\s+/);
   const command = args[0].toLowerCase();
 
-  // Helper to get member from ID or Mention
   async function getMemberFromArg(arg) {
     if (!arg) return null;
-    let userId = arg.replace(/[<@!>]/g, ''); // Remove <@!> if mention
-    try {
-        return await message.guild.members.fetch(userId);
-    } catch (e) { return null; }
+    let userId = arg.replace(/[<@!>]/g, ''); 
+    try { return await message.guild.members.fetch(userId); } catch (e) { return null; }
   }
 
   if (command === ',raid') {
@@ -324,33 +306,20 @@ client.on('messageCreate', async message => {
     try { await message.delete(); } catch(e) {}
     message.channel.send(text);
   }
-  
-  // VERIFY (Flexible: ID or Mention)
   else if (command === ',verify' || command === ',v') {
      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
-     
-     // Try to find a member using the first argument (could be ID or Mention)
      const member = await getMemberFromArg(args[1]);
-     
-     if (!member) return message.reply("Usage: `,v @user` OR `,v 987654321`");
-     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) return message.reply("❌ Hierarchy Error. I cannot verify someone ranked higher than me.");
-     
+     if (!member) return message.reply("Usage: `,v @user` OR `,v ID`");
+     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) return message.reply("❌ Hierarchy Error.");
      try { await member.roles.add(SOCIETY_ROLE_ID); message.reply(`✅ **Verified:** ${member.user.username}`); } catch (e) { message.reply("❌ Error."); }
   }
-  
-  // UNVERIFY (Flexible: ID or Mention)
   else if (command === ',unverify') {
      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply("❌ No permission.");
-     
      const member = await getMemberFromArg(args[1]);
-
-     if (!member) return message.reply("Usage: `,unverify @user` OR `,unverify 987654321`");
-     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) return message.reply("❌ Hierarchy Error. I cannot unverify someone ranked higher than me.");
-     
+     if (!member) return message.reply("Usage: `,unverify @user` OR `,unverify ID`");
+     if (message.guild.members.me.roles.highest.position <= member.roles.highest.position) return message.reply("❌ Hierarchy Error.");
      try { await member.roles.remove(SOCIETY_ROLE_ID); message.reply(`🚫 **Unverified:** ${member.user.username}`); } catch (e) { message.reply("❌ Error."); }
   }
-  
-  // See/Check
   else if (command === ',see' || command === ',check') {
       const username = args[1];
       if (!username) return message.reply(`Usage: ${command} username`);
