@@ -32,44 +32,74 @@ const ROLE_ILY = '1459624016582021151';
 const MAIN_GROUP_ID = '34770198';
 const GROUP_LINK = "https://www.roblox.com/communities/34770198/goyard";
 
-// ✅ TAG LIST
+// ✅ COMPLETE TAG LIST (Updated Jan 2026)
 const TAG_LIST = {
-  '1067988454': "OX", 
-  '857292331': "ILY",
-  '34721394': "DBIN",
-  '330818699': "анђели",
-  '154361656': "OF] [☑️] [⭐️",
-  '155020361': "PURGE] [🕷️",
-  '35692393': "RICH] [💸",
-  '34531592': "x] [🌌",
-  '207697447': "DREAM] [✨",
-  '34733738': "rr] [💘",
-  '231745930': "XIX] [🩸",
-  '33357680': "zzz] [💤",
-  '35512078': "sinz] [🕊️",
-  '465919461': "SPIRIT] [👻",
-  '573727572': "rue] [💮",
-  '56578165': "SEKAI] [🎭",
-  '526649056': "</3",
-  '528695996': "^.^",
-  '481483834': ":3",
-  '909775996': "YAU",
-  '35474227': "<3",
-  '34423896': "092",
-  '975405103': "kuks",
-  '102951198': "SOUL",
-  '35953799': "PRETTY",
-  '1015469631': "1887",
-  '522792477': "XII",
-  '1039567303': "MONKEY",
-  '34585493': "PITY",
-  '638893691': "224",
-  '744245198': "77",
-  '35053157': ">_<",
-  '695715021': "CHILDSUPPORT",
-  '711369814': "V3",
-  '36052811': "TRACE"
+    // -- Owner Crew Tags --
+    '34721394': "DBIN",
+    '330818699': "анђели",
+    '154361656': "OF] [☑️] [⭐️",
+
+    // -- Emoji Crew Tags --
+    '155020361': "PURGE] [🕷️",
+    '35692393': "RICH] [💸",
+    '3734281': "oz] [🃏",
+    '34531592': "x] [🌌",
+    '207697447': "DREAM] [✨",
+    '34733738': "rr] [💘",
+    '231745930': "XIX] [🩸",
+    '33357680': "zzz] [💤",
+    '35512078': "sinz] [🕊️",
+    '465919461': "SPIRIT] [👻",
+    '573727572': "rue] [💮",
+    '56578165': "SEKAI] [🎭",
+    '72730318': "uu] [💞",
+    '35934838': "UN] [💢",
+    '612553184': "XX] [❄️",
+    '1015469631': "STAB] [🗡️",
+    '35987271': "YY] [💎",
+    '1069479533': "BRUCE WAYNE] [🦇",
+    '1098506333': "LUNA] [🦋",
+
+    // -- Private Crew Tags --
+    '528912807': "YOULOSE",
+    '526649056': "</3",
+    '528695996': "^. .^",
+    '481483834': ":3",
+    '909775996': "YAU",
+    '35474227': "<3",
+    '34423896': "092",
+    '975405103': "kuks",
+    '224656158': "jerk",
+    '791523432': "x_x",
+    '429397710': "kitten",
+
+    // -- Standard Crew Tags --
+    '102951198': "SOUL",
+    '35953799': "PRETTY",
+    '522792477': "XII",
+    '34585493': "PITY",
+    '744245198': "GUILTY",
+    '35053157': ">_<",
+    '695715021': "CHILDSUPPORT",
+    '711369814': "V3",
+    '857292331': "ILY",
+    '1067988454': "OX",
+    '139096504': "DEMON",
+    '201751396': "EGO",
+    '94195597': "CHEAT",
+    '35733646': "TERROR",
+    '36028121': "AK",
+    '66188667': "CRY",
+    '720851336': "DAWN",
+    '616095368': "AGEPLAYER",
+    '1051841454': "MEOW",
+    '35423131': "MERCY",
+
+    // -- Temporary Crew Tags --
+    '36052811': "TRACE"
 };
+
+// ⚠️ FRIENDLY GROUPS (WILL BE IGNORED IN BGC)
 const OUR_GROUP_IDS = ['857292331', '1067988454']; 
 
 // --- 3. SLASH COMMAND REGISTRATION ---
@@ -99,7 +129,7 @@ client.once('ready', async () => {
 
 // --- 5. LOGIC HELPERS ---
 
-// --- RAID HANDLER (UPDATED DESIGN) ---
+// --- RAID HANDLER ---
 async function handleRaid(targetLink, replyCallback, channel) {
     let userId = null;
     if (targetLink) {
@@ -166,6 +196,7 @@ async function handleRaid(targetLink, replyCallback, channel) {
     } catch (e) { console.log(e); replyCallback("❌ Error fetching target."); }
 }
 
+// --- BGC HANDLER ---
 async function handleBGC(link, replyCallback, channel) {
     let targetGroupId = null;
     if (link) {
