@@ -1,7 +1,17 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionsBitField, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const http = require('http');
 
-// --- 1. KEEP ALIVE (FOR RENDER 24/7) ---
+// --- 0. ANTI-CRASH SYSTEM (KEEPS BOT ALIVE) ---
+process.on('unhandledRejection', (reason, p) => {
+    console.log(' [Anti-Crash] :: Unhandled Rejection/Catch');
+    console.log(reason, p);
+});
+process.on("uncaughtException", (err, origin) => {
+    console.log(' [Anti-Crash] :: Uncaught Exception/Catch');
+    console.log(err, origin);
+});
+
+// --- 1. KEEP ALIVE (FOR RENDER) ---
 http.createServer((req, res) => {
   res.write("I am alive");
   res.end();
